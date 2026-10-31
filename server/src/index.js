@@ -56,6 +56,10 @@ app.use((err, req, res, next) => {
     }
     return res.status(502).json({ error: "AI service error. Please try again." });
   }
+  if (err?.name === "AbortError" || /timed? ?out|aborted/i.test(err?.message || "")) {
+    console.error("[ai] timeout:", err.message);
+    return res.status(504).json({ error: "AI took too long to answer. Please try again." });
+  }
   console.error(err);
   res.status(500).json({ error: "Something went wrong. Please try again." });
 });

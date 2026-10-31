@@ -7,7 +7,9 @@ import { getWeather } from "./weather.js";
 import { listDiagnoses } from "./store.js";
 
 // Get a free key from https://aistudio.google.com/apikey
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+if (!process.env.GEMINI_API_KEY) console.error("[ai] GEMINI_API_KEY is not set!");
+// timeout: give up on one Gemini call after 40 seconds instead of waiting forever.
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: 40_000 } });
 // "gemini-flash-latest" always points to Google's newest Flash model (free tier).
 const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
@@ -164,6 +166,7 @@ export async function chatWithAgent({ messages, language, city, farmerId }) {
     });
 
     const calls = response.functionCalls ?? [];
+    console.log(`[ai] chat step ${step + 1}: ${calls.length ? "tools " + calls.map((c) => c.name).join(", ") : "final answer"}`);
     if (calls.length === 0) {
       return response.text?.trim() || "Sorry, I could not answer. Please try again.";
     }

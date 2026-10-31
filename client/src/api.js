@@ -25,10 +25,18 @@ const API_URL = __API_URL__;
 if (API_URL && !DEMO_MODE) fetch(`${API_URL}/api/health`).catch(() => {});
 
 async function request(path, options = {}) {
-  const res = await fetch(API_URL + path, {
-    ...options,
-    headers: { "x-farmer-id": farmerId, ...(options.headers || {}) },
-  });
+  let res;
+  try {
+    res = await fetch(API_URL + path, {
+      ...options,
+      headers: { "x-farmer-id": farmerId, ...(options.headers || {}) },
+      // 2 minutes: enough for a sleeping free server to wake up (~1 min) plus the AI answer.
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch (err) {
+    if (err.name === "TimeoutError") throw new Error("Server took too long. Please try again.");
+    throw new Error("Could not reach the server. Check your internet and try again.");
+  }
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
