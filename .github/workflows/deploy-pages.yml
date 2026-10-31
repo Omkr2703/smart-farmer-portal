@@ -22,8 +22,8 @@ jobs:
         working-directory: client
         env:
           # Backend address (Settings -> Secrets and variables -> Actions -> Variables -> API_URL).
-          # If empty, the site is built in demo mode.
-          VITE_API_URL: ${{ vars.API_URL }}
+          # Defaults to the Render backend below.
+          VITE_API_URL: ${{ vars.API_URL || 'https://smart-farmer-portal.onrender.com' }}
         run: |
           npm ci
           GITHUB_PAGES=true npm run build

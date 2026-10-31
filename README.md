@@ -1,6 +1,6 @@
 # 🌱 Smart Farmer Portal
 
-**🔗 Live:** https://omkr2703.github.io/smart-farmer-portal/
+**🔗 Live:** https://omkr2703.github.io/smart-farmer-portal/ (also at https://smart-farmer-portal.onrender.com)
 
 An AI-powered farming assistant for small farmers in India. It works in **Hindi and English** and supports **voice**.
 
