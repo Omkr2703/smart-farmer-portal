@@ -10,8 +10,29 @@ import { listDiagnoses } from "./store.js";
 if (!process.env.GEMINI_API_KEY) console.error("[ai] GEMINI_API_KEY is not set!");
 // timeout: give up on one Gemini call after 40 seconds instead of waiting forever.
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: 40_000 } });
-// "gemini-flash-latest" always points to Google's newest Flash model (free tier).
-const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+// Free-tier models, tried in order. If one is busy (503), over its limit (429)
+// or not available (404), we automatically try the next one.
+// Override with GEMINI_MODELS="model-a,model-b" if Google renames them.
+const MODELS = (process.env.GEMINI_MODELS || "gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash,gemini-2.5-flash-lite")
+  .split(",").map((m) => m.trim()).filter(Boolean);
+const RETRYABLE = new Set([404, 429, 500, 503]);
+
+// Call Gemini with automatic fallback to the next model.
+async function generate(request) {
+  let lastError;
+  for (const model of MODELS) {
+    try {
+      const response = await ai.models.generateContent({ ...request, model });
+      response.usedModel = model;
+      return response;
+    } catch (err) {
+      lastError = err;
+      if (!RETRYABLE.has(err.status)) throw err; // e.g. bad key - no point trying other models
+      console.warn(`[ai] ${model} failed (${err.status}), trying next model`);
+    }
+  }
+  throw lastError;
+}
 
 const LANG_NAME = { hi: "simple Hindi (Devanagari script)", en: "simple English" };
 
@@ -56,8 +77,7 @@ export async function diagnosePlant({ imageBase64, mediaType, crop, notes, langu
     `Write every text field in ${LANG_NAME[language] || LANG_NAME.hi}.`,
   ].filter(Boolean).join("\n");
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
+  const response = await generate({
     contents: [
       {
         role: "user",
@@ -156,8 +176,7 @@ export async function chatWithAgent({ messages, language, city, farmerId }) {
 
   // The agent loop: ask the AI -> if it wants a tool, run it and send the result back -> repeat.
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await ai.models.generateContent({
-      model: MODEL,
+    const response = await generate({
       contents,
       config: {
         systemInstruction: `${CHAT_SYSTEM}\n${context}`,
@@ -192,10 +211,10 @@ export async function chatWithAgent({ messages, language, city, farmerId }) {
 // Never returns the API key - only whether it is set and Google's error message.
 export async function checkAI() {
   const started = Date.now();
-  const info = { model: MODEL, keySet: Boolean(process.env.GEMINI_API_KEY) };
+  const info = { models: MODELS, keySet: Boolean(process.env.GEMINI_API_KEY) };
   try {
-    const response = await ai.models.generateContent({ model: MODEL, contents: "Reply with just: OK" });
-    return { ...info, ok: true, reply: response.text?.trim(), ms: Date.now() - started };
+    const response = await generate({ contents: "Reply with just: OK" });
+    return { ...info, ok: true, usedModel: response.usedModel, reply: response.text?.trim(), ms: Date.now() - started };
   } catch (err) {
     return { ...info, ok: false, status: err.status, error: String(err.message).slice(0, 500), ms: Date.now() - started };
   }
