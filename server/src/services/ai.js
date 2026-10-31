@@ -1,18 +1,15 @@
-// All AI (Claude) logic lives here.
+// All AI logic lives here (Google Gemini API - free tier).
 //  1. diagnosePlant()  - looks at a plant photo and returns a structured report (JSON).
 //  2. chatWithAgent()  - a chat assistant that can call tools (weather, farmer's history).
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat, betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { getWeather } from "./weather.js";
 import { listDiagnoses } from "./store.js";
 
-// The SDK reads ANTHROPIC_API_KEY from the environment automatically.
-const client = new Anthropic();
-const MODEL = process.env.AI_MODEL || "claude-opus-5-5";
-
-// If the model declines a request, the API retries it on a fallback model by itself.
-const FALLBACK = { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
+// Get a free key from https://aistudio.google.com/apikey
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// "gemini-flash-latest" always points to Google's newest Flash model (free tier).
+const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
 const LANG_NAME = { hi: "simple Hindi (Devanagari script)", en: "simple English" };
 
@@ -20,8 +17,8 @@ const LANG_NAME = { hi: "simple Hindi (Devanagari script)", en: "simple English"
 // 1. Plant diagnosis from a photo
 // ---------------------------------------------------------------------------
 
-// The exact shape of the answer we want back. The API guarantees the reply
-// matches this schema, so the frontend can rely on every field.
+// The exact shape of the answer we want back. Gemini is told to follow this
+// JSON schema, and we validate the reply with Zod before using it.
 const DiagnosisSchema = z.object({
   isPlant: z.boolean().describe("false if the photo does not show a plant or crop"),
   crop: z.string().describe("crop or plant name, e.g. Tomato"),
@@ -37,8 +34,9 @@ const DiagnosisSchema = z.object({
   weatherAdvice: z.string().describe("when to spray / irrigate given the forecast; empty if no weather"),
   seeExpert: z.boolean().describe("true if the farmer should contact a Krishi Vigyan Kendra / expert"),
 });
+const DiagnosisJsonSchema = z.toJSONSchema(DiagnosisSchema);
 
-const DIAGNOSE_SYSTEM = `You are "Kisan Sahayak", an agricultural plant-health expert helping small farmers in India.
+const DIAGNOSE_SYSTEM = `You are an agricultural plant-health expert helping small farmers in India.
 You look at a photo of a plant, leaf, fruit or field and identify diseases, pests or nutrient problems.
 Rules:
 - Be honest about uncertainty. If the photo is blurry or unclear, set confidence "low" and say what photo to take instead.
@@ -52,86 +50,95 @@ export async function diagnosePlant({ imageBase64, mediaType, crop, notes, langu
   const details = [
     crop && `Farmer says the crop is: ${crop}`,
     notes && `Farmer's notes: ${notes}`,
-    weather
-      ? `Weather at ${weather.place}: ${JSON.stringify(weather)}`
-      : "No weather data available.",
+    weather ? `Weather at ${weather.place}: ${JSON.stringify(weather)}` : "No weather data available.",
     `Write every text field in ${LANG_NAME[language] || LANG_NAME.hi}.`,
   ].filter(Boolean).join("\n");
 
-  const response = await client.beta.messages.parse({
+  const response = await ai.models.generateContent({
     model: MODEL,
-    max_tokens: 16000,
-    ...FALLBACK,
-    output_config: { effort: "medium", format: betaZodOutputFormat(DiagnosisSchema) },
-    system: DIAGNOSE_SYSTEM,
-    messages: [
+    contents: [
       {
         role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-          { type: "text", text: `Please check this plant.\n${details}` },
+        parts: [
+          { inlineData: { mimeType: mediaType, data: imageBase64 } },
+          { text: `Please check this plant.\n${details}` },
         ],
       },
     ],
+    config: {
+      systemInstruction: DIAGNOSE_SYSTEM,
+      responseMimeType: "application/json",
+      responseJsonSchema: DiagnosisJsonSchema,
+    },
   });
 
-  if (response.stop_reason === "refusal") {
-    throw new AIError("The AI could not analyse this image. Please try another photo.");
+  // Parse and validate the JSON reply. If anything is off, show a friendly error.
+  let parsed;
+  try {
+    parsed = DiagnosisSchema.safeParse(JSON.parse(response.text ?? ""));
+  } catch {
+    parsed = { success: false };
   }
-  if (!response.parsed_output) {
-    throw new AIError("The AI reply was incomplete. Please try again.");
+  if (!parsed.success) {
+    throw new AIError("The AI could not analyse this image. Please try again or use a clearer photo.");
   }
-  return response.parsed_output;
+  return parsed.data;
 }
 
 // ---------------------------------------------------------------------------
 // 2. Chat assistant (AI agent with tools)
 // ---------------------------------------------------------------------------
 
-const CHAT_SYSTEM = `You are "Kisan Sahayak", a friendly farming assistant for small farmers in India.
+const CHAT_SYSTEM = `You are a friendly farming assistant for small farmers in India.
 You help with crop choice, sowing time, irrigation, fertiliser, pests and diseases, weather decisions and government schemes.
 - Answer in short, simple sentences. Use bullet points for steps. Keep answers under 150 words unless asked for more.
+- Do not use markdown symbols like ** or #. Plain text and "•" bullets only.
 - Use the get_weather tool whenever the answer depends on weather (spraying, irrigation, sowing, harvesting).
 - Use the get_my_crop_history tool when the farmer refers to their earlier photos or past problems.
 - If you don't know something specific (exact local prices, scheme deadlines), say so and suggest the local KVK or agriculture office.
 - Never invent numbers you are not sure about.`;
 
-function buildTools(farmerId) {
-  const weatherTool = betaZodTool({
+// Tool definitions: what the AI is told it can call.
+const TOOL_DECLARATIONS = [
+  {
     name: "get_weather",
-    description:
-      "Get current weather and the 3-day forecast (temperature, humidity, rain, wind) for an Indian city or district.",
-    inputSchema: z.object({ city: z.string().describe("City or district name, e.g. Bhopal") }),
-    run: async ({ city }) => {
-      try {
-        return JSON.stringify(await getWeather(city));
-      } catch (err) {
-        return `Weather not available: ${err.message}`;
-      }
+    description: "Get current weather and the 3-day forecast (temperature, humidity, rain, wind) for an Indian city or district.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { city: { type: "string", description: "City or district name, e.g. Bhopal" } },
+      required: ["city"],
     },
-  });
-
-  const historyTool = betaZodTool({
+  },
+  {
     name: "get_my_crop_history",
     description: "Get this farmer's recent plant photo diagnoses (crop, problem, date).",
-    inputSchema: z.object({}),
-    run: async () => {
-      const items = await listDiagnoses(farmerId, 5);
-      if (!items.length) return "No past diagnoses for this farmer.";
-      return JSON.stringify(
-        items.map((d) => ({
-          date: d.createdAt,
-          crop: d.result.crop,
-          problem: d.result.problemName,
-          status: d.result.healthStatus,
-          city: d.city,
-        }))
-      );
-    },
-  });
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+];
 
-  return [weatherTool, historyTool];
+// Tool implementations: the real code that runs when the AI calls a tool.
+async function runTool(name, args, farmerId) {
+  try {
+    if (name === "get_weather") {
+      return await getWeather(String(args?.city || ""));
+    }
+    if (name === "get_my_crop_history") {
+      const items = await listDiagnoses(farmerId, 5);
+      return items.map((d) => ({
+        date: d.createdAt,
+        crop: d.result.crop,
+        problem: d.result.problemName,
+        status: d.result.healthStatus,
+        city: d.city,
+      }));
+    }
+    return { error: `Unknown tool ${name}` };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
+
+const MAX_STEPS = 5; // safety limit on tool-call rounds
 
 // messages: [{ role: "user" | "assistant", content: "text" }, ...] - last one is the farmer's new question
 export async function chatWithAgent({ messages, language, city, farmerId }) {
@@ -140,26 +147,43 @@ export async function chatWithAgent({ messages, language, city, farmerId }) {
     city && `The farmer's location is ${city}.`,
   ].filter(Boolean).join(" ");
 
-  const finalMessage = await client.beta.messages.toolRunner({
-    model: MODEL,
-    max_tokens: 16000,
-    max_iterations: 5,
-    ...FALLBACK,
-    output_config: { effort: "low" }, // chat should be fast
-    system: `${CHAT_SYSTEM}\n${context}`,
-    tools: buildTools(farmerId),
-    messages,
-  });
+  // Gemini calls the assistant role "model".
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
 
-  if (finalMessage.stop_reason === "refusal") {
-    throw new AIError("Sorry, I can't help with that question.");
+  // The agent loop: ask the AI -> if it wants a tool, run it and send the result back -> repeat.
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents,
+      config: {
+        systemInstruction: `${CHAT_SYSTEM}\n${context}`,
+        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+      },
+    });
+
+    const calls = response.functionCalls ?? [];
+    if (calls.length === 0) {
+      return response.text?.trim() || "Sorry, I could not answer. Please try again.";
+    }
+
+    // Keep the AI's tool request in the conversation, then add every tool result in one message.
+    contents.push(response.candidates[0].content);
+    const results = await Promise.all(
+      calls.map(async (call) => ({
+        functionResponse: {
+          id: call.id,
+          name: call.name,
+          response: { result: await runTool(call.name, call.args, farmerId) },
+        },
+      }))
+    );
+    contents.push({ role: "user", parts: results });
   }
-  const text = finalMessage.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
-  return text || "Sorry, I could not answer. Please try again.";
+
+  return "Sorry, that took too many steps. Please ask in a simpler way.";
 }
 
 // An error whose message is safe to show to the user.

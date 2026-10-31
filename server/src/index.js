@@ -5,7 +5,7 @@ import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
+import { ApiError } from "@google/genai";
 import { MulterError } from "multer";
 import { connectDB } from "./lib/db.js";
 import { requireFarmerId, rateLimit } from "./lib/middleware.js";
@@ -46,15 +46,14 @@ app.use((err, req, res, next) => {
   if (err instanceof AIError) {
     return res.status(422).json({ error: err.message });
   }
-  if (err instanceof Anthropic.RateLimitError) {
-    return res.status(503).json({ error: "AI is busy right now. Please try again in a minute." });
-  }
-  if (err instanceof Anthropic.AuthenticationError) {
-    console.error("[ai] Invalid ANTHROPIC_API_KEY");
-    return res.status(500).json({ error: "AI service is not configured." });
-  }
-  if (err instanceof Anthropic.APIError) {
+  if (err instanceof ApiError) {
     console.error("[ai]", err.status, err.message);
+    if (err.status === 429) {
+      return res.status(503).json({ error: "AI is busy right now (free limit reached). Please try again in a minute." });
+    }
+    if ([400, 401, 403].includes(err.status) && /key/i.test(err.message)) {
+      return res.status(500).json({ error: "AI service is not configured." });
+    }
     return res.status(502).json({ error: "AI service error. Please try again." });
   }
   console.error(err);

@@ -1,0 +1,16 @@
+# Render Blueprint: New -> Blueprint -> select this repo.
+services:
+  - type: web
+    name: smart-farmer-portal
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false   # Render asks you for this value
+      - key: MONGODB_URI
+        sync: false
+      - key: NODE_VERSION
+        value: "20"

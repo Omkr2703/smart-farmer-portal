@@ -1,6 +1,6 @@
-# Every push to main rebuilds the demo site and publishes it to the gh-pages branch.
+# Every push to main rebuilds the site and publishes it to the gh-pages branch.
 # Live link: https://omkr2703.github.io/smart-farmer-portal/
-name: Deploy demo to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -18,8 +18,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build demo
+      - name: Build site
         working-directory: client
+        env:
+          # Backend address (Settings -> Secrets and variables -> Actions -> Variables -> API_URL).
+          # If empty, the site is built in demo mode.
+          VITE_API_URL: ${{ vars.API_URL }}
         run: |
           npm ci
           GITHUB_PAGES=true npm run build

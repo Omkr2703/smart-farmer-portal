@@ -1,8 +1,6 @@
 # 🌱 Smart Farmer Portal
 
-**🔗 Live demo:** https://omkr2703.github.io/smart-farmer-portal/
-
-> The GitHub Pages demo is a static build. Weather is live, but AI answers are samples, because GitHub Pages cannot run the backend or keep the API key secret. Run it locally or deploy it on Render (below) to use the real AI.
+**🔗 Live:** https://omkr2703.github.io/smart-farmer-portal/
 
 An AI-powered farming assistant for small farmers in India. It works in **Hindi and English** and supports **voice**.
 
@@ -18,14 +16,14 @@ An AI-powered farming assistant for small farmers in India. It works in **Hindi 
 |---|---|
 | Frontend | React 19, Vite, Web Speech API, Canvas image compression |
 | Backend | Node.js, Express 5, Multer, Zod validation |
-| AI | Claude API (vision + structured JSON output + tool-calling agent) |
+| AI | Google Gemini API (vision + structured JSON output + function-calling agent) |
 | Database | MongoDB (Mongoose); falls back to in-memory storage when not configured |
 | Weather | Open-Meteo API (free, no key) |
 
 ## Architecture
 
 ```
-React app ──► Express API ──► Claude API (vision, structured output, agent + tools)
+React app ──► Express API ──► Gemini API (vision, structured output, agent + tools)
                   │                         │
                   │                  tools: get_weather, get_my_crop_history
                   ├──► Open-Meteo (weather, cached 30 min)
@@ -41,10 +39,10 @@ React app ──► Express API ──► Claude API (vision, structured output,
 
 ## Run locally
 
-Requirements: Node.js 20+ and an [Anthropic API key](https://platform.claude.com). MongoDB is optional.
+Requirements: Node.js 20+ and a free [Gemini API key](https://aistudio.google.com/apikey). MongoDB is optional.
 
 ```bash
-cp server/.env.example server/.env   # then put your ANTHROPIC_API_KEY in server/.env
+cp server/.env.example server/.env   # then put your GEMINI_API_KEY in server/.env
 npm run install-all
 npm run dev:server    # terminal 1 -> http://localhost:5000
 npm run dev:client    # terminal 2 -> http://localhost:5173
@@ -52,11 +50,12 @@ npm run dev:client    # terminal 2 -> http://localhost:5173
 
 ## Deploy (Render, free tier)
 
-1. Push this repo to GitHub.
-2. On [render.com](https://render.com): **New → Web Service → connect the repo**.
-3. Set **Build command** to `npm run build` and **Start command** to `npm start`.
-4. Under **Environment**, add `ANTHROPIC_API_KEY` and `MONGODB_URI` (free cluster from MongoDB Atlas).
-5. Deploy. The same server serves the API and the React app.
+1. On [render.com](https://render.com): **New → Blueprint → connect this repo**. Render reads `render.yaml`.
+2. Enter `GEMINI_API_KEY` and `MONGODB_URI` (free cluster from MongoDB Atlas) when asked.
+3. Deploy. The same server serves the API and the React app.
+4. To make the GitHub Pages site use this backend, add a repository variable `API_URL` (your Render URL) under **Settings → Secrets and variables → Actions → Variables**, then re-run the "Deploy to GitHub Pages" workflow.
+
+> Without `API_URL`, the GitHub Pages build runs in demo mode: weather is live and AI answers are samples.
 
 ## API
 

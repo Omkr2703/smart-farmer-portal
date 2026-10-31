@@ -18,8 +18,14 @@ function getFarmerId() {
 }
 const farmerId = getFarmerId();
 
+// Backend address. Empty = same server (local dev, or when the backend serves the app).
+const API_URL = __API_URL__;
+
+// Free servers "sleep" when unused. Ping once on page load so it is awake when the farmer needs it.
+if (API_URL && !DEMO_MODE) fetch(`${API_URL}/api/health`).catch(() => {});
+
 async function request(path, options = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(API_URL + path, {
     ...options,
     headers: { "x-farmer-id": farmerId, ...(options.headers || {}) },
   });
