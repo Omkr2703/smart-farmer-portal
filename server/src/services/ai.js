@@ -188,5 +188,18 @@ export async function chatWithAgent({ messages, language, city, farmerId }) {
   return "Sorry, that took too many steps. Please ask in a simpler way.";
 }
 
+// Health check for the AI: makes one tiny call and reports what happened.
+// Never returns the API key - only whether it is set and Google's error message.
+export async function checkAI() {
+  const started = Date.now();
+  const info = { model: MODEL, keySet: Boolean(process.env.GEMINI_API_KEY) };
+  try {
+    const response = await ai.models.generateContent({ model: MODEL, contents: "Reply with just: OK" });
+    return { ...info, ok: true, reply: response.text?.trim(), ms: Date.now() - started };
+  } catch (err) {
+    return { ...info, ok: false, status: err.status, error: String(err.message).slice(0, 500), ms: Date.now() - started };
+  }
+}
+
 // An error whose message is safe to show to the user.
 export class AIError extends Error {}

@@ -9,7 +9,7 @@ import { ApiError } from "@google/genai";
 import { MulterError } from "multer";
 import { connectDB } from "./lib/db.js";
 import { requireFarmerId, rateLimit } from "./lib/middleware.js";
-import { AIError } from "./services/ai.js";
+import { AIError, checkAI } from "./services/ai.js";
 import diagnoseRoute from "./routes/diagnose.js";
 import chatRoute from "./routes/chat.js";
 import historyRoute from "./routes/history.js";
@@ -23,6 +23,8 @@ app.use(cors({ origin: process.env.CLIENT_ORIGIN || true }));
 app.use(express.json({ limit: "200kb" }));
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
+// Open /api/ai-check in a browser to see if the AI key and model work.
+app.get("/api/ai-check", rateLimit({ limit: 5, windowMs: 60_000 }), async (req, res) => res.json(await checkAI()));
 
 const aiLimit = rateLimit({ limit: 10, windowMs: 60_000 }); // 10 AI calls per minute per IP
 app.use("/api/weather", weatherRoute);
