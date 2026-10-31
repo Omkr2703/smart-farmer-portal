@@ -36,6 +36,7 @@ export default function DiagnosisCard({ result, t, language }) {
         </div>
         {canSpeak && <button className="ghost" onClick={toggleSpeak}>{speaking ? t.stop : t.listen}</button>}
       </div>
+      {result.isDemo && <p className="demo-banner">{t.demoResult}</p>}
       <p>{result.summary}</p>
       {result.weatherAdvice && (
         <div className="section highlight">

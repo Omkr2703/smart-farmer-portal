@@ -4,6 +4,8 @@ export const strings = {
   hi: {
     appName: "स्मार्ट किसान पोर्टल",
     tagline: "फसल की फोटो डालें, AI बीमारी और इलाज बताएगा",
+    demoBanner: "यह डेमो वर्ज़न है: मौसम असली है, पर AI के जवाब सैंपल हैं। असली AI वाला पूरा वर्ज़न GitHub पर है।",
+    demoResult: "डेमो: यह सैंपल जवाब है, असली AI जाँच नहीं",
     tabDiagnose: "📷 फसल जाँच",
     tabChat: "💬 सवाल पूछें",
     tabHistory: "📋 मेरी जाँचें",
@@ -49,6 +51,8 @@ export const strings = {
   en: {
     appName: "Smart Farmer Portal",
     tagline: "Upload a crop photo, AI finds the disease and treatment",
+    demoBanner: "Demo version: weather is real, but AI answers are samples. The full version with real AI is on GitHub.",
+    demoResult: "Demo: this is a sample answer, not a real AI check",
     tabDiagnose: "📷 Check Crop",
     tabChat: "💬 Ask a Question",
     tabHistory: "📋 My Checks",

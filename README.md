@@ -1,5 +1,9 @@
 # 🌱 Smart Farmer Portal
 
+**🔗 Live demo:** https://omkr2703.github.io/smart-farmer-portal/
+
+> The GitHub Pages demo is a static build. Weather is live, but AI answers are samples, because GitHub Pages cannot run the backend or keep the API key secret. Run it locally or deploy it on Render (below) to use the real AI.
+
 An AI-powered farming assistant for small farmers in India. It works in **Hindi and English** and supports **voice**.
 
 - 📷 **Crop disease detection:** a farmer uploads a photo of a leaf or plant. The AI identifies the disease, pest or nutrient deficiency, then suggests organic and chemical treatments and prevention steps.

@@ -5,6 +5,7 @@ import Diagnose from "./pages/Diagnose.jsx";
 import Chat from "./pages/Chat.jsx";
 import History from "./pages/History.jsx";
 import WeatherCard from "./components/WeatherCard.jsx";
+import { DEMO_MODE } from "./demo.js";
 
 // Read/write a value in localStorage safely (it can be blocked in some browsers).
 function useSaved(key, initial) {
@@ -36,6 +37,13 @@ export default function App() {
           {language === "hi" ? "English" : "हिंदी"}
         </button>
       </header>
+
+      {DEMO_MODE && (
+        <p className="demo-banner">
+          {t.demoBanner}{" "}
+          <a href="https://github.com/Omkr2703/smart-farmer-portal" target="_blank" rel="noreferrer">GitHub ↗</a>
+        </p>
+      )}
 
       <section className="card city-row">
         <label>
