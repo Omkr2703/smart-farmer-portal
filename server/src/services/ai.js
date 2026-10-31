@@ -111,8 +111,7 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: "get_my_crop_history",
-    description: "Get this farmer's recent plant photo diagnoses (crop, problem, date).",
-    parametersJsonSchema: { type: "object", properties: {} },
+    description: "Get this farmer's recent plant photo diagnoses (crop, problem, date). Takes no input.",
   },
 ];
 
