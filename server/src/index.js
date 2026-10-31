@@ -50,8 +50,8 @@ app.use((err, req, res, next) => {
   }
   if (err instanceof ApiError) {
     console.error("[ai]", err.status, err.message);
-    if (err.status === 429) {
-      return res.status(503).json({ error: "AI is busy right now (free limit reached). Please try again in a minute." });
+    if (err.status === 429 || err.status === 503) {
+      return res.status(503).json({ error: "AI is busy right now. Please try again in a minute." });
     }
     if ([400, 401, 403].includes(err.status) && /key/i.test(err.message)) {
       return res.status(500).json({ error: "AI service is not configured." });
@@ -65,6 +65,9 @@ app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: "Something went wrong. Please try again." });
 });
+
+// Log unexpected async errors instead of letting them crash the server.
+process.on("unhandledRejection", (err) => console.error("[unhandledRejection]", err));
 
 connectDB()
   .then(() => app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`)))

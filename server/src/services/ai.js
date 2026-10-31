@@ -8,8 +8,12 @@ import { listDiagnoses } from "./store.js";
 
 // Get a free key from https://aistudio.google.com/apikey
 if (!process.env.GEMINI_API_KEY) console.error("[ai] GEMINI_API_KEY is not set!");
-// timeout: give up on one Gemini call after 40 seconds instead of waiting forever.
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: 40_000 } });
+// timeout: give up on one call after 30 s. attempts: 1 turns off the SDK's own slow
+// retries (up to 5 tries with growing waits) - we switch to the next model instead.
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: { timeout: 30_000, retryOptions: { attempts: 1 } },
+});
 // Free-tier models, tried in order. If one is busy (503), over its limit (429)
 // or not available (404), we automatically try the next one.
 // Override with GEMINI_MODELS="model-a,model-b" if Google renames them.
