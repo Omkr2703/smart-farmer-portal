@@ -1,0 +1,51 @@
+// Functions that talk to our backend.
+
+// A random id per browser, so each farmer sees only their own history.
+function getFarmerId() {
+  let id = null;
+  try {
+    id = localStorage.getItem("farmerId");
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem("farmerId", id);
+    }
+  } catch {
+    id = id || crypto.randomUUID();
+  }
+  return id;
+}
+const farmerId = getFarmerId();
+
+async function request(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { "x-farmer-id": farmerId, ...(options.headers || {}) },
+  });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+export function diagnose({ photo, thumbnail, crop, notes, city, language }) {
+  const form = new FormData();
+  form.append("photo", photo, "plant.jpg");
+  form.append("thumbnail", thumbnail);
+  form.append("crop", crop);
+  form.append("notes", notes);
+  form.append("city", city);
+  form.append("language", language);
+  return request("/api/diagnose", { method: "POST", body: form });
+}
+
+export function chat({ messages, language, city }) {
+  return request("/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages, language, city: city || undefined }),
+  });
+}
+
+export const getHistory = () => request("/api/history");
+export const deleteHistory = (id) => request(`/api/history/${id}`, { method: "DELETE" });
+export const getWeather = (city) => request(`/api/weather?city=${encodeURIComponent(city)}`);
